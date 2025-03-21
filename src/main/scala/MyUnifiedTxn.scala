@@ -1,7 +1,10 @@
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
 
 object MyUnifiedTxn extends App{
 
+
+  Logger.getLogger("org").setLevel(Level.ERROR)
   val spark = SparkSession.builder()
     .appName("Mock Data Example")
     .master("local[*]")
@@ -26,6 +29,6 @@ object MyUnifiedTxn extends App{
 
   val esdlAccountDs = accDateDs.toDS()
 
-  TransformData.getEsdlTxnMapping(esdlTransactionDs, esdlAccountDs)
+  TransformData.getEsdlTxnMapping(esdlTransactionDs, esdlAccountDs, EsdlAccOpenDateDs)
 
 }

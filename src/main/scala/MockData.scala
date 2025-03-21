@@ -11,7 +11,7 @@ object MockData {
     card_number = "987654321",
     account_number = "123456789",
     holding_branch_key = "001",
-    account_key = "ECIF123",
+    account_key = "ACC0001",
     source_system_cd = "OLB",
     channel_cd = "04",
     source_transaction_id = "654321",
@@ -94,7 +94,7 @@ object MockData {
     holding_branch_key = "001",
     product_type_code = "CL",
     relation_type_cd = "1",
-    account_key = "ECIF123",
+    account_key = "ACC0001",
     acceptance_date_time = new Timestamp(System.currentTimeMillis()),
     msg_type_Code = "MT103",
     currency = "CAD",
@@ -188,7 +188,7 @@ object MockData {
   )
 
   val esdlAccountData: Seq[EsdlAccount] = Seq(
-    EsdlAccount("LOAN", "ECIF123", "ECIF123", "PRD001", "ACTIVE", "123456789", "BR001", "USD")
+    EsdlAccount("CL", "ECIF123", "ACC0001", "PRD001", "ACTIVE", "987654321", "BR001", "USD")
   )
 
 }
