@@ -131,7 +131,7 @@ object Models {
   case class EsdlAccOpenDate(
                               ecif_composite_key:String,
                               curr_plc_acct_num:String,
-                              holding_branch_key_source:String,
+                              holding_branch_key_source: Int,
                               product_type_code: String
                             )
 
@@ -146,14 +146,6 @@ object Models {
                       source_json: String
 
                     )
-
-  case class SrcFiName(
-                        fl_num: String
-                      )
-
-  case class TgtFullName(
-                          full_name: String
-                        )
 
   case class PrmConfig(esdlStgDb: String,
                        esdlStgTbl: String,
@@ -178,6 +170,38 @@ object Models {
                         holding_branch_key: String,
                         acct_curr_cd: String
                         )
+
+
+
+  case class EsdlUnifiedTxn(
+                             account_number: String,
+                             holding_branch_key: String,
+                             product_type_code: String,
+                             opp_account_number: String,
+                             opp_branch_key: String,
+                             operation_type: String,
+                             on_behalf_of_ind: String,
+                             ecif_key: String,
+                             card_number: String,
+                             execution_local_date_time: Timestamp,
+                             cr_dr_code: String,
+                             customer1_Account_holder_cif_id: String,
+                             customer2_Account_holder_cif_id: String
+                           )
+
+
+  case class EsdlPartyXRef(
+                            cross_ref_num: String,
+                            party_key: String,
+                            bus_app_id: String
+                          )
+
+
+  case class CddprfRskScoreLatestFull(
+                                       party_risk_score_rv: String,
+                                       party_key: String,
+                                       fctp_process_date: Date
+                                     )
 
 
 }

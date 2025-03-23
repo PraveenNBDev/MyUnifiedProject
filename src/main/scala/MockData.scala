@@ -1,4 +1,5 @@
-import Models.EsdlAccount
+import Models.{CddprfRskScoreLatestFull, EsdlAccount, EsdlPartyXRef, EsdlUnifiedTxn}
+import org.apache.logging.log4j.core.time.Instant
 import org.apache.spark.sql.SparkSession
 
 import java.sql.{Date, Timestamp}
@@ -124,9 +125,9 @@ object MockData {
   // Mock data for EsdlPartyProd
   val mockEsdlPartyProd = Models.EsdlPartyProd(
     party_key = "PARTY001",
-    account_number = "123456789",
+    account_number = "00000123456789",
     holding_branch_key = "001",
-    product_type_code = "CL",
+    product_type_code = "CARD",
     relation_type_Cd = "1",
     amount_key = "001-123456789",
     ecif_composite_key = "ECIF123"
@@ -136,7 +137,7 @@ object MockData {
   val mockEsdlAccOpenDate = Models.EsdlAccOpenDate(
     ecif_composite_key = "ECIF123",
     curr_plc_acct_num = "123456789",
-    holding_branch_key_source = "001",
+    holding_branch_key_source = 1,
     product_type_code = "CL"
   )
 
@@ -189,6 +190,29 @@ object MockData {
 
   val esdlAccountData: Seq[EsdlAccount] = Seq(
     EsdlAccount("CL", "ECIF123", "ACC0001", "PRD001", "ACTIVE", "987654321", "BR001", "USD")
+  )
+
+  val mockEsdlUnifiedTxn = Seq(
+    EsdlUnifiedTxn(
+      "000123456789", "BR001", "CARD", "OPP789012", "BR002", "DEBIT",
+      "N", "ECIF123", "123456789", new Timestamp(System.currentTimeMillis()),
+      "CR", "CIF1001", "CIF2001"
+    ),
+    EsdlUnifiedTxn(
+      "ACC789012", "BR002", "VISA", "OPP123456", "BR003", "CREDIT",
+      "Y", "ECIF456", "CARD987654", new Timestamp(System.currentTimeMillis()),
+      "DR", "CIF3001", "CIF4001"
+    )
+  )
+
+  val mockEsdlPartyXRef = Seq(
+    EsdlPartyXRef("XREF456", "PK1001", "344"),
+    EsdlPartyXRef("XREF156", "PK2001", "345")
+  )
+
+  val mockCddprfRskScoreLatestFull = Seq(
+    CddprfRskScoreLatestFull("HIGH", "PK1001", Date.valueOf("2024-03-01")),
+    CddprfRskScoreLatestFull("LOW", "PK2001", Date.valueOf("2024-03-02"))
   )
 
 }

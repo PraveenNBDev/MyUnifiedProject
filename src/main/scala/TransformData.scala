@@ -1,8 +1,11 @@
-import Models.{EsdlAccOpenDate, EsdlAccount, EsdlTransaction}
-import org.apache.spark.sql.functions.{coalesce, col, concat, concat_ws, countDistinct, expr, first, lit, regexp_replace, when}
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import Models.{CddprfRskScoreLatestFull, EsdlAccOpenDate, EsdlAccount, EsdlPartyProd, EsdlPartyXRef, EsdlTransaction, EsdlUnifiedTxn}
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{coalesce, col, collect_list, collect_set, concat, concat_ws, countDistinct, dense_rank, expr, first, least, lit, month, regexp_replace, sha, when}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession, functions}
 
 object TransformData {
+
+  def removeLeadingZeros(colName: String) = regexp_replace(col(colName), "^0+", "")
 
   def getEsdlTxnMapping(esdlTxnDs: Dataset[EsdlTransaction], esdlAccDs: Dataset[EsdlAccount], esdlAccOpenDt: Dataset[EsdlAccOpenDate])  = {
 
@@ -80,7 +83,6 @@ object TransformData {
       .drop("holding_branch_key")
       .drop("ecif_composite_key")
 
-    def removeLeadingZeros(colName: String) = regexp_replace(col(colName), "^0+", "")
 
     val esdlAccDs1 = esdlAccDs.withColumn("ecif_composite_key1", esdlAccDs("ecif_composite_key")).drop(col("ecif_composite_key"))
       .withColumn("account_number1", esdlAccDs("account_number")).drop("account_number")
@@ -91,16 +93,17 @@ object TransformData {
         && esdlAccDs1("account_key") === esdlTxnAttrbuteMap("account_key"), "left")
       .withColumn("product_type_code", esdlAccDs1("product_type_code"))
       .withColumn("product_cd", esdlAccDs1("product_cd"))
-      .withColumn("customer1_account_status", when(esdlAccDs1("status_code").isNotNull, esdlAccDs1("status_code")).otherwise(lit("null")))
-      //.drop("opp_account_number")
 
     val finalResult1 = esdlAccColMap.
       groupBy("opp_account_number")
       .agg(
-        when(countDistinct("customer1_account_status") > 1, lit("NULL"))
-          .otherwise(first("customer1_account_status"))
+        when(countDistinct("status_code") > 1, lit("NULL"))
+          .otherwise(first("status_code"))
           .alias("customer1_account_status")
       )
+
+    val mergedResult = esdlAccColMap
+      .join(finalResult1, Seq("opp_account_number"), "left")
 
     val step1 = esdlTxnAttrbuteMap.alias("a")
       .join(esdlAccDs.alias("b"),
@@ -129,8 +132,6 @@ object TransformData {
           col("e.product_type_code") === "CL", "left")
       .select(col("f.*"), coalesce(col("e.status_code"), lit("NULL")).alias("customer2_account_status"))
 
-    finalStatusLookup.show(false)
-
     // setting to NULL if more than one found
     val finalResult = finalStatusLookup.
       groupBy("opp_account_number")
@@ -139,6 +140,161 @@ object TransformData {
           .otherwise(first("customer2_account_status"))
           .alias("customer2_account_status")
       )
+mergedResult.join(finalResult,  Seq("opp_account_number"), "left")
+  }
+
+
+  def getUnifiedAttMap(unifiedTxnDs: Dataset[EsdlUnifiedTxn], esdlPartyProdDs: Dataset[EsdlPartyProd], PartyXRefDs: Dataset[EsdlPartyXRef] ): DataFrame = {
+
+    val unifiedTxnDs1 = unifiedTxnDs
+      .withColumn("primary_party_key", when(col("ecif_key").isNotNull, col("ecif_key")).otherwise(lit("null")))
+      .withColumn("creditor_id",
+        when(col("cr_dr_code").isin("D"), col("customer2_Account_holder_cif_id"))
+          .when(col("cr_dr_code").isin("C"), col("customer1_Account_holder_cif_id"))
+          .otherwise(lit("null")))
+
+    val step1 = unifiedTxnDs1.alias("a")
+      .join(esdlPartyProdDs.alias("b"), col("a.card_number") === removeLeadingZeros("b.account_number"), "left")
+      .filter(col("b.relation_type_cd").isin(1, 3, 5, 9, 11, 31, 36, 37, 38, 40) &&
+        col("b.product_type_code").isin("CARD", "CC", "PCFC", "SVSA", "VISA", "PP", "PPC"))
+      .withColumn("conductor_key", col("b.party_key"))
+      .drop(col("b.account_number"))
+      .drop(col("b.holding_branch_key"))
+
+
+    val step2 = step1.alias("s1")
+      .join(PartyXRefDs.alias("c"), col("c.bus_app_id") === "344", "left")
+      .withColumn("cross_ref_match", expr("substring(c.cross_ref_num, 1, 4) || '4' || substring(c.cross_ref_num, 6, length(c.cross_ref_num))"))
+      .filter(col("cross_ref_match") === col("s1.account_number"))
+      .withColumn("conductor_key", least(col("s1.conductor_key"), col("c.party_key")))
+
+    val step3 = step2.alias("s2")
+      .join(esdlPartyProdDs.alias("b"), removeLeadingZeros("s2.account_number") === removeLeadingZeros("b.account_number") &&
+        removeLeadingZeros("s2.holding_branch_key") === removeLeadingZeros("b.holding_branch_key"), "left")
+      .filter(col("b.relation_type_cd").isin(1, 3, 9) &&
+        col("b.product_type_code").isin("DEP", "PDEP", "CL", "PLOA"))
+      .withColumn("conductor_key", coalesce(col("s2.conductor_key"), col("b.party_key")))
+
+    val validRelationTypes = Seq(1, 3, 5, 9, 11, 31, 36, 37, 38, 40)
+    val validProductTypes = Seq("CARD", "CC", "PCFC", "SVSA", "VISA", "PP", "PPC")
+
+    val step4Result = step3.alias("s3")
+      .join(esdlPartyProdDs.alias("b"),
+        col("s3.card_number") === removeLeadingZeros("b.account_number"), "left")
+      .filter(col("b.relation_type_cd").isin(validRelationTypes: _*) &&
+        col("b.product_type_code").isin(validProductTypes: _*))
+      .groupBy("s3.card_number")
+      .agg(
+        collect_list("b.party_key").alias("party_keys"),
+        collect_list("b.relation_type_cd").alias("relation_types")
+      )
+      .withColumn("target_party_key", expr("""
+    CASE
+      WHEN size(party_keys) = 1 THEN element_at(party_keys, 1)
+      WHEN array_contains(relation_types, '1') AND array_contains(relation_types, '31') THEN
+        element_at(filter(party_keys, x -> array_contains(relation_types, cast(x as string))), 1)
+      ELSE
+        element_at(filter(party_keys, x -> !array_contains(relation_types, cast(x as string))
+                                           AND !array_contains(relation_types, '31')), 1)
+    END
+  """))
+
+    // conductor_key
+    val finalResult = step4Result.withColumn("conductor_key", col("target_party_key")).select("conductor_key")
+    finalResult
+
+  }
+
+  def getEcifKeyAttMap(unifiedTxnDs: Dataset[EsdlUnifiedTxn], esdlPartyProdDs: Dataset[EsdlPartyProd], esdlAccOpenDt: Dataset[EsdlAccOpenDate], cddprfRskScoreLatestfl: Dataset[CddprfRskScoreLatestFull] ): DataFrame = {
+
+    val unifiedTxnDsColRename = unifiedTxnDs
+      .withColumn("product_type_code_utxn", col("product_type_code"))
+      .withColumn("account_number_utxn", col("account_number"))
+      .withColumn("holding_branch_key_utxn", col("holding_branch_key"))
+
+    val esdlPartyProdColRename = esdlPartyProdDs
+      .withColumn("product_type_code_prod", col("product_type_code"))
+      .withColumn("account_number_prod", col("account_number"))
+      .withColumn("holding_branch_key_prod", col("holding_branch_key"))
+      .withColumn("ecif_composite_key_prod", col("ecif_composite_key"))
+      .withColumn("party_key_prod", col("party_key"))
+
+    val joinPartyKey = unifiedTxnDsColRename
+      .alias("a").join(esdlPartyProdColRename.alias("b"),
+      col("a.product_type_code_utxn") === col("b.product_type_code_prod") &&
+        (col("a.account_number_utxn") === col("b.account_number_prod") || col("a.opp_account_number") === col("b.account_number_prod")) &&
+        (col("a.holding_branch_key_utxn").isNotNull && col("a.holding_branch_key_utxn") === col("b.holding_branch_key_prod")) &&
+        col("b.relation_type_cd") === lit("1"), "left")
+
+    val esdlAccOpenDtColRename = esdlAccOpenDt
+      .withColumn("product_type_code_accopen", col("product_type_code"))
+      .withColumn("ecif_composite_key_accopen", col("ecif_composite_key"))
+
+    val joinEcifKey = joinPartyKey.alias("a").join(esdlAccOpenDtColRename.alias("e"),
+      col("a.account_number_utxn") === col("e.curr_plc_acct_num") &&
+        col("a.holding_branch_key_utxn").cast("int") === col("e.holding_branch_key_source") &&
+        col("e.product_type_code_accopen") === lit("CL"), "left")
+
+    val finalPartyKey = joinEcifKey.alias("e").join(esdlPartyProdColRename.alias("b"),
+      col("b.ecif_composite_key_prod") === col("e.ecif_composite_key_accopen") &&
+        col("b.product_type_code_prod") === lit("CL") &&
+        col("b.relation_type_cd") === lit("1"), "left")
+      .drop(col("e.party_key_prod"))
+      .drop(col("e.product_type_code_prod"))
+
+    val cddprfRskScoreLatestflColRename = cddprfRskScoreLatestfl.withColumn("party_key_rsk", col("party_key"))
+
+    val highestRiskScore = finalPartyKey.alias("b").join(cddprfRskScoreLatestflColRename.alias("c"),
+        col("b.party_key_prod") === col("c.party_key_rsk") &&
+          month(col("b.execution_local_date_time")) - 1 === month(col("c.fctp_process_date")), "left")
+      .withColumn("rank", dense_rank().over(Window.partitionBy("b.product_type_code_prod").orderBy(col("c.party_risk_score_rv").desc)))
+      .filter(col("rank") === 1)
+
+    val finalResult = highestRiskScore.withColumn("ecif_key", when(
+      col("b.product_type_code_utxn").isin("CARD", "CC", "PCFC", "SVSA", "VISA", "PPP", "PPC", "DEP", "PDEP", "CL", "PLOA"),
+      null).otherwise(col("b.party_key_prod")))
+
+    finalResult
+  }
+
+  def getCust1AccHolderCifId(esdlUnifiedTxn1: Dataset[EsdlUnifiedTxn], esdlPartyProd1: Dataset[EsdlPartyProd], esdlAccOpenDt1: Dataset[EsdlAccOpenDate]): DataFrame = {
+
+    val joinedDF = esdlUnifiedTxn1.alias("a")
+      .join(esdlPartyProd1.alias("b"),
+        col("a.account_number") === col("b.account_number") &&
+          col("a.holding_branch_key") === col("b.holding_branch_key") &&
+          col("a.product_type_code") === col("b.product_type_code") &&
+          col("b.relation_type_cd") === lit("1") &&
+          col("a.product_type_code").isin("DEP", "CARD", "CC", "PCFC", "SVSA", "VISA", "PP", "PPC", "PDEP", "PLOA", "CL"),
+        "left_outer")
+      .selectExpr("a.*", "b.party_key")
+
+    val joinedWithEcif = joinedDF.alias("a")
+      .join(esdlAccOpenDt1.alias("e"),
+        col("a.account_number") === col("e.curr_plc_acct_num") &&
+          col("a.holding_branch_key").cast("int") === col("e.holding_branch_key_source") &&
+          !col("a.product_type_code").isin("CARD", "CC", "PCFC", "SVSA", "VISA", "PP", "PPC", "PDEP", "DEP", "PLOA", "CL") &&
+          col("e.product_type_code") === lit("CL"),
+        "left_outer")
+      .selectExpr("a.*", "e.ecif_composite_key")
+
+    val finalDF = joinedWithEcif.alias("a")
+      .join(esdlPartyProd1.alias("b"),
+        col("b.ecif_composite_key") === col("a.ecif_composite_key") &&
+          col("b.product_type_code") === lit("CL") &&
+          col("b.relation_type_cd") === lit("1"),
+        "left_outer")
+      .selectExpr("a.*", "b.party_key")
+
+    val resultDF = finalDF.groupBy("account_number")
+      .agg(concat_ws(";", collect_set("b.party_key")).alias("target_party_key"))
+      .withColumn("customer1_account_holder_cif_id", when(col("target_party_key").isNull, lit("NULL")).otherwise(col("target_party_key")))
+
+    resultDF.show()
+
+    resultDF
+
+
 
 
   }

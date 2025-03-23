@@ -1,10 +1,9 @@
-import org.apache.log4j.{Level, Logger}
+import MockData.{mockCddprfRskScoreLatestFull, mockEsdlPartyXRef, mockEsdlUnifiedTxn}
 import org.apache.spark.sql.SparkSession
+
 
 object MyUnifiedTxn extends App{
 
-
-  Logger.getLogger("org").setLevel(Level.ERROR)
   val spark = SparkSession.builder()
     .appName("Mock Data Example")
     .master("local[*]")
@@ -29,6 +28,13 @@ object MyUnifiedTxn extends App{
 
   val esdlAccountDs = accDateDs.toDS()
 
+  val dfEsdlUnifiedTxn = mockEsdlUnifiedTxn.toDS()
+  val dfEsdlPartyXRef = mockEsdlPartyXRef.toDS()
+  val dfCddprfRskScoreLatestFull = mockCddprfRskScoreLatestFull.toDS()
+
   TransformData.getEsdlTxnMapping(esdlTransactionDs, esdlAccountDs, EsdlAccOpenDateDs)
+  TransformData.getUnifiedAttMap(dfEsdlUnifiedTxn, EsdlPartyProdDs, dfEsdlPartyXRef)
+  TransformData.getEcifKeyAttMap(dfEsdlUnifiedTxn, EsdlPartyProdDs,EsdlAccOpenDateDs, dfCddprfRskScoreLatestFull)
+  TransformData.getCust1AccHolderCifId(dfEsdlUnifiedTxn, EsdlPartyProdDs,EsdlAccOpenDateDs)
 
 }
