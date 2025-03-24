@@ -36,5 +36,6 @@ object MyUnifiedTxn extends App{
   TransformData.getUnifiedAttMap(dfEsdlUnifiedTxn, EsdlPartyProdDs, dfEsdlPartyXRef)
   TransformData.getEcifKeyAttMap(dfEsdlUnifiedTxn, EsdlPartyProdDs,EsdlAccOpenDateDs, dfCddprfRskScoreLatestFull)
   TransformData.getCust1AccHolderCifId(dfEsdlUnifiedTxn, EsdlPartyProdDs,EsdlAccOpenDateDs)
+  TransformData.getAccHoldersAll(dfEsdlUnifiedTxn, EsdlPartyProdDs,EsdlAccOpenDateDs)
 
 }
