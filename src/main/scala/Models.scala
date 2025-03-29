@@ -125,7 +125,8 @@ object Models {
                             product_type_code:String,
                             relation_type_Cd:String,
                             amount_key: String,
-                            ecif_composite_key:String
+                            ecif_composite_key:String,
+                            owner_count: Int
                           )
 
   case class EsdlAccOpenDate(

@@ -130,7 +130,8 @@ object MockData {
     product_type_code = "CARD",
     relation_type_Cd = "1",
     amount_key = "001-123456789",
-    ecif_composite_key = "ECIF123"
+    ecif_composite_key = "ECIF123",
+    owner_count = 342
   )
 
   // Mock data for EsdlAccOpenDate
