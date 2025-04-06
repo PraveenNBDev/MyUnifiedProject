@@ -76,7 +76,8 @@ object Models {
                               emt_recipient_id: String,
                               organization_unit_cd: String,
                               opp_organization_unit_cd: String,
-                              fx_tran_exchange_rate: String
+                              fx_tran_exchange_rate: String,
+                              product_type_code: String
                             )
 
   case class StgCertPayAmlReport(
@@ -114,8 +115,6 @@ object Models {
                                   debtor_id:String,
                                   fraud_check_Action:String,
                                   transaction_id:String
-
-
                                 )
 
   case class EsdlPartyProd(
@@ -182,6 +181,9 @@ object Models {
                              opp_branch_key: String,
                              operation_type: String,
                              on_behalf_of_ind: String,
+                             primary_party_key: String,
+                             third_party_cif_id: String,
+                             creditor_id: String,
                              ecif_key: String,
                              card_number: String,
                              execution_local_date_time: Timestamp,
@@ -189,6 +191,7 @@ object Models {
                              customer1_Account_holder_cif_id: String,
                              customer2_Account_holder_cif_id: String
                            )
+
 
 
   case class EsdlPartyXRef(

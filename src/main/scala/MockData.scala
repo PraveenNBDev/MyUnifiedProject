@@ -81,7 +81,8 @@ object MockData {
     emt_recipient_id = "123",
     organization_unit_cd = "UNIT_CD_ORG",
     opp_organization_unit_cd = "UNIT_CD_ORG123",
-    fx_tran_exchange_rate = "FX_RATE_123"
+    fx_tran_exchange_rate = "FX_RATE_123",
+    product_type_code = "CL"
   )
 
   // Mock data for StgCertPayAmlReport
@@ -196,13 +197,13 @@ object MockData {
   val mockEsdlUnifiedTxn = Seq(
     EsdlUnifiedTxn(
       "000123456789", "BR001", "CARD", "OPP789012", "BR002", "DEBIT",
-      "N", "ECIF123", "123456789", new Timestamp(System.currentTimeMillis()),
-      "CR", "CIF1001", "CIF2001"
+      "N", "ECIF123", "123456789",
+      "CR", "CIF1001", "CIF2001",  new Timestamp(System.currentTimeMillis()), "3hdah", "dodn", "dojdj"
     ),
     EsdlUnifiedTxn(
       "ACC789012", "BR002", "VISA", "OPP123456", "BR003", "CREDIT",
-      "Y", "ECIF456", "CARD987654", new Timestamp(System.currentTimeMillis()),
-      "DR", "CIF3001", "CIF4001"
+      "Y", "ECIF456", "CARD987654",
+      "DR", "CIF3001", "CIF4001",new Timestamp(System.currentTimeMillis()),  "3hdah", "dodn", "dojdj"
     )
   )
 
